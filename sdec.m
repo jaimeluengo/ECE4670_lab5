@@ -37,7 +37,7 @@ L1 = k-t;
 
 y0 = y(L1+n_plus+1: L1+n_plus+L);
 y0 = fft(y0)/sqrt(L);
-y1 = y0(113:4113);
+y1 = y0(113:4113); % mmaybe change to 4112
 
 gain = abs(y1/sqrt(2*P));
 bits = [];
