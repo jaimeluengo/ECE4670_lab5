@@ -4,7 +4,7 @@ bits=randi([0 1],numbits,1);
 M=32; % modulation index
 n_data_symble=4000; %number of samples of data per symbol
 n_lowf=112; %number of samples in the low frequency band
-n_highf=708;%number of samples in the low frequency band
+n_highf=908;%number of samples in the low frequency band
 n_prefix=120;%number of samples in the cyclic prefix
 symbol_size = (1+2*(n_highf+n_lowf+n_data_symble));
 n_symbols = numbits/log2(M)/n_data_symble;
@@ -29,7 +29,7 @@ x5_train=[x4_train(end-n_prefix+1:end);x4_train]*gamma;
 x=[];
 x0_p=[];
 for i=1:n_symbols
-    if(i==6)
+    if(i==3 ||i==6 || i==9)
         x=[x; x5_train];
     end
     x0=bits((i-1)*block_size+1:(i-1)*block_size+block_size);   %*sqrt(2);
@@ -109,17 +109,44 @@ y = y(start:(start+len_sent-1));%removed silence
 
 % remember to normalize by gamma
 
-%training
-y0_train = y(5*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*6);
-y=[y(1:5*(symbol_size+n_prefix));y((n_prefix+symbol_size)*6+1:end)];%removed training
-y1_train = fft(y0_train)/sqrt(symbol_size);
-y2_train = y1_train(n_lowf+2:package_size+1+n_lowf)/gamma; % 113:41112
+%training 1
+y0_train(:,1) = y(2*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*3);
+y1_train (:,1) = fft(y0_train(:,1))/sqrt(symbol_size);
+y2_train (:,1) = y1_train(n_lowf+2:package_size+1+n_lowf,1)/gamma; % 113:41112
 
-gain = abs(y2_train./rand_realizations);% vector channel gain
-phase_y=angle(y2_train);
+gain (:,1) = abs(y2_train(:,1)./rand_realizations);% vector channel gain
+phase_y=angle(y2_train(:,1));
 phase_r=angle(rand_realizations);
-phase= wrapToPi(phase_y-fliplr(phase_r)); %vector of channel phase shift
+phase (:,1)= wrapToPi(phase_y-fliplr(phase_r)); %vector of channel phase shift
+
+
+%training 2
+y0_train(:,2) = y(6*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*7);
+y1_train(:,2) = fft(y0_train(:,2))/sqrt(symbol_size);
+y2_train(:,2) = y1_train(n_lowf+2:package_size+1+n_lowf,2)/gamma; % 113:41112
+
+gain(:,2) = abs(y2_train(:,2)./rand_realizations);% vector channel gain
+phase_y=angle(y2_train(:,2));
+phase_r=angle(rand_realizations);
+phase(:,2)= wrapToPi(phase_y-fliplr(phase_r)); %vector of channel phase shift
+
+
+%training 3
+y0_train(:,3) = y(10*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*11);
+y1_train(:,3) = fft(y0_train(:,3))/sqrt(symbol_size);
+y2_train(:,3) = y1_train(n_lowf+2:package_size+1+n_lowf,3)/gamma; % 113:41112
+
+gain(:,3) = abs(y2_train(:,3)./rand_realizations);% vector channel gain
+phase_y=angle(y2_train(:,3));
+phase_r=angle(rand_realizations);
+phase(:,3)= wrapToPi(phase_y-fliplr(phase_r)); %vector of channel phase shift
+
+y=[y(1:2*(symbol_size+n_prefix));
+    y((n_prefix+symbol_size)*3+1:6*(symbol_size+n_prefix));
+    y((n_prefix+symbol_size)*7+1:10*(symbol_size+n_prefix));
+    y((n_prefix+symbol_size)*11+1:end)];%removed training
 outbits = [];
+
 % load('phase_chan.mat','phase_chan');
 % phase=phase_chan;
 % stem(y)
@@ -129,18 +156,47 @@ outbits = [];
 
 
 for i=1:n_symbols
-    y3=[];
-    a=n_prefix+(n_prefix+symbol_size)*(i-1)+1;
-    b=(n_prefix+symbol_size)*i;
-    y0 = y(a:b);
-    y1 = fft(y0)/sqrt(symbol_size);
-    y2 = y1(n_lowf+2:n_lowf+4001);
-    y3=y2./gain.*exp(-j*phase)./rand_realizations*5/gamma;
-    z=qamdemod(y3,M);
-    for k=1:package_size
-        y4(5*(k-1)+1:5*k,1)=(fliplr(de2bi(z(k),log2(M))))';
-    end
-    outbits=[outbits;y4];
+    if(i<4)
+        y3=[];
+        a=n_prefix+(n_prefix+symbol_size)*(i-1)+1;
+        b=(n_prefix+symbol_size)*i;
+        y0 = y(a:b);
+        y1 = fft(y0)/sqrt(symbol_size);
+        y2 = y1(n_lowf+2:n_lowf+n_data_symble+1);
+        y3=y2./gain(:,1).*exp(-j*phase(:,1))./rand_realizations*5/gamma;
+        z=qamdemod(y3,M);
+        for k=1:package_size
+            y4(5*(k-1)+1:5*k,1)=(fliplr(de2bi(z(k),log2(M))))';
+        end
+        outbits=[outbits;y4];
+    elseif(i<7)
+        y3=[];
+        a=n_prefix+(n_prefix+symbol_size)*(i-1)+1;
+        b=(n_prefix+symbol_size)*i;
+        y0 = y(a:b);
+        y1 = fft(y0)/sqrt(symbol_size);
+        y2 = y1(n_lowf+2:n_lowf+n_data_symble+1);
+        y3=y2./gain(:,2).*exp(-j*phase(:,2))./rand_realizations*5/gamma;
+        z=qamdemod(y3,M);
+        for k=1:package_size
+            y4(5*(k-1)+1:5*k,1)=(fliplr(de2bi(z(k),log2(M))))';
+        end
+        outbits=[outbits;y4]; 
+    else
+        y3=[];
+        a=n_prefix+(n_prefix+symbol_size)*(i-1)+1;
+        b=(n_prefix+symbol_size)*i;
+        y0 = y(a:b);
+        y1 = fft(y0)/sqrt(symbol_size);
+        y2 = y1(n_lowf+2:n_lowf+n_data_symble+1);
+        y3=y2./gain(:,3).*exp(-j*phase(:,3))./rand_realizations*5/gamma;
+        z=qamdemod(y3,M);
+        for k=1:package_size
+            y4(5*(k-1)+1:5*k,1)=(fliplr(de2bi(z(k),log2(M))))';
+        end
+        outbits=[outbits;y4];
+        end
+
 end
 figure(2)
 correct=sum(outbits==bits);
