@@ -2,12 +2,15 @@ clear
 numbits=2e5;
 bits=randi([0 1],numbits,1);
 M=32; % modulation index
-n_data_symble=4000; %number of samples of data per symbol
+n_data_symble=2500; %number of samples of data per symbol
+n_lowqam=25;
+n_highqam=600;
 n_lowf=112; %number of samples in the low frequency band
-n_highf=908;%number of samples in the low frequency band
+n_highf=708;%number of samples in the low frequency band
 n_prefix=120;%number of samples in the cyclic prefix
 symbol_size = (1+2*(n_highf+n_lowf+n_data_symble));
 n_symbols = numbits/log2(M)/n_data_symble;
+n_tsymbols =uint8(n_symbols/3);
 block_size= numbits/n_symbols;
 package_size=block_size/log2(M);
 P = 0.00125;
@@ -29,18 +32,25 @@ x5_train=[x4_train(end-n_prefix+1:end);x4_train]*gamma;
 x=[];
 x0_p=[];
 for i=1:n_symbols
-    if(i==3 ||i==6 || i==9)
+    if(mod(i,3)==0)
         x=[x; x5_train];
     end
     x0=bits((i-1)*block_size+1:(i-1)*block_size+block_size);   %*sqrt(2);
     for k=1:package_size
-        x0_prime(k,1)=bi2de(fliplr(x0((k-1)*log2(M)+1:k*log2(M))'));
+        if(k<=n_lowqam)
+            x0_low(k,1)=bi2de(fliplr(x0((k-1)*(log2(M)-1)+1:k*(log2(M)-1))'));
+        elseif(k<=package_size-n_highqam)
+            x0_prime(k-n_lowqam,1)=bi2de(fliplr(x0((k-1)*log2(M)+1:k*log2(M))'));
+        else
+            x0_high(k-n_highqam,1)=bi2de(fliplr(x0((k-1)*(log2(M)-1)+1:k*(log2(M)-1))'));
+        end
     end
-    x1=qammod(x0_prime,M)*gamma;
-    x1_rand=x1.*rand_realizations/5;
+    x1=[qammod(x0_low,2^(log2(M)-1))*gamma]/(log2(M)-1);
+    x1=[x1;qammod(x0_prime,M)*gamma/log2(M)];
+    x1=[x1;qammod(x0_high,2^(log2(M)-1))*gamma/(log2(M)-1)];
 %     x1=x1;
 %     x1=x0.*rand_realizations;
-    x2=[zeros(n_lowf,1);x1_rand;zeros(n_highf,1)];
+    x2=[zeros(n_lowf,1);x1;zeros(n_highf,1)];
     x3=[0;x2;conj(fliplr(x2')')];
     x4=ifft(x3)*sqrt(length(x3));
     x0_p=[x0_p;x0_prime];
@@ -67,22 +77,22 @@ L0 = round(1000*rand(1,1));
 L1 = round(1000*rand(1,1));
 y = [zeros(L0,1) ; y ; zeros(L1,1)];
 % add noise
-%y = y + 0.0001*randn(length(y),1);
-
-% actual channel:
-% create random L0 and L1 pauses from uniform distribution 
-a = 0.25;
-b = 3;
-L0 = (b-a).*rand(1,1) + a;
-L1 = (b-a).*rand(1,1) + a;
-% change these lines before submission!!!!!
-cmd1 = sprintf('~/Desktop/ECE4670/ccplay/ccplay --prepause ');
-cmd2 = sprintf('%f --postpause %f --channel audio0 tx.wav rx.wav', L0, L1);
-cmd = [cmd1 cmd2];
-system(cmd);
-
-%% Decoder
-y = audioread('rx.wav');
+y = y + 0.0001*randn(length(y),1);
+% 
+% % actual channel:
+% % create random L0 and L1 pauses from uniform distribution 
+% a = 0.25;
+% b = 3;
+% L0 = (b-a).*rand(1,1) + a;
+% L1 = (b-a).*rand(1,1) + a;
+% % change these lines before submission!!!!!
+% cmd1 = sprintf('~/Desktop/ECE4670/ccplay/ccplay --prepause ');
+% cmd2 = sprintf('%f --postpause %f --channel audio0 tx.wav rx.wav', L0, L1);
+% cmd = [cmd1 cmd2];
+% system(cmd);
+% 
+% %% Decoder
+% y = audioread('rx.wav');
 
 
 square = y.^2;
@@ -110,15 +120,16 @@ y = y(start:(start+len_sent-1));%removed silence
 % remember to normalize by gamma
 
 %training 1
-y0_train(:,1) = y(2*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*3);
-y1_train (:,1) = fft(y0_train(:,1))/sqrt(symbol_size);
-y2_train (:,1) = y1_train(n_lowf+2:package_size+1+n_lowf,1)/gamma; % 113:41112
+for (u=1:n_tsymbols)
+    y0_train(:,u) = y((2+3*(u-1))*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*(3+3*(u-1));
+    y1_train (:,u) = fft(y0_train(:,u))/sqrt(symbol_size);
+    y2_train (:,u) = y1_train(n_lowf+2:package_size+1+n_lowf,u)/gamma; % 113:41112
 
-gain (:,1) = abs(y2_train(:,1)./rand_realizations);% vector channel gain
-phase_y=angle(y2_train(:,1));
-phase_r=angle(rand_realizations);
-phase (:,1)= wrapToPi(phase_y-fliplr(phase_r)); %vector of channel phase shift
-
+    gain (:,u) = abs(y2_train(:,u)./rand_realizations);% vector channel gain
+    phase_y=angle(y2_train(:,u));
+    phase_r=angle(rand_realizations);
+    phase (:,u)= wrapToPi(phase_y-fliplr(phase_r)); %vector of channel phase shift
+end
 
 %training 2
 y0_train(:,2) = y(6*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*7);
@@ -141,10 +152,32 @@ phase_y=angle(y2_train(:,3));
 phase_r=angle(rand_realizations);
 phase(:,3)= wrapToPi(phase_y-fliplr(phase_r)); %vector of channel phase shift
 
+%training 4
+y0_train(:,4) = y(10*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*11);
+y1_train(:,4) = fft(y0_train(:,4))/sqrt(symbol_size);
+y2_train(:,4) = y1_train(n_lowf+2:package_size+1+n_lowf,4)/gamma; % 113:41112
+
+gain(:,4) = abs(y2_train(:,4)./rand_realizations);% vector channel gain
+phase_y=angle(y2_train(:,4));
+phase_r=angle(rand_realizations);
+phase(:,4)= wrapToPi(phase_y-fliplr(phase_r)); %vector of channel phase shift
+
+%training 5
+y0_train(:,5) = y(10*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*11);
+y1_train(:,5) = fft(y0_train(:,5))/sqrt(symbol_size);
+y2_train(:,5) = y1_train(n_lowf+2:package_size+1+n_lowf,5)/gamma; % 113:41112
+
+gain(:,5) = abs(y2_train(:,5)./rand_realizations);% vector channel gain
+phase_y=angle(y2_train(:,5));
+phase_r=angle(rand_realizations);
+phase(:,5)= wrapToPi(phase_y-fliplr(phase_r)); %vector of channel phase shift
+
 y=[y(1:2*(symbol_size+n_prefix));
     y((n_prefix+symbol_size)*3+1:6*(symbol_size+n_prefix));
     y((n_prefix+symbol_size)*7+1:10*(symbol_size+n_prefix));
-    y((n_prefix+symbol_size)*11+1:end)];%removed training
+    y((n_prefix+symbol_size)*11+1:14*(symbol_size+n_prefix));
+    y((n_prefix+symbol_size)*15+1:18*(symbol_size+n_prefix));
+    y((n_prefix+symbol_size)*19+1:end)];%removed training
 outbits = [];
 
 % load('phase_chan.mat','phase_chan');
