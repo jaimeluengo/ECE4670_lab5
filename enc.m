@@ -232,3 +232,9 @@ t=length(d);
 wrong=zeros(t,1);
 wrong(d)=1;
 plot(wrong);
+
+% FIgure of merit
+N=numbits-correct;
+Pr=max(1,800*P);
+data_rate=2e5*44.1e3/length(x);
+perf=(data_rate*(1-N/1e5)^10)/Pr;
