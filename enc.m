@@ -1,15 +1,21 @@
 clear
+
+
+
 %% Parametres to tweak
 numbits=2e5; %length of bitsteam to send
+P = 0.00125;%Average power constraint
 bits=randi([0 1],numbits,1); %bitstream
-M=64; % modulation index of higher gain frequency band
+M=128; % modulation index of higher gain frequency band
 N=16;% lower modulation index of lower gain frequency bands
-n_data_symble=2125; %number of samples of data per symbol
+n_data_symble=1850; %number of samples of data per symbol
 n_lowqam=25;%number of samples with N modulation index at low frequency
-n_highqam=100;%number of samples with N modulation index at high frequency
-n_lowf=112; %number of samples zero-padded in the low frequency band
-n_highf=908;%number of sa`mples zero-padded in the high frequency band
+n_highqam=125;%number of samples with N modulation index at high frequency
+n_lowf=172; %number of samples zero-padded in the low frequency band
+n_highf=1058;%number of sa`mples zero-padded in the high frequency band
 n_prefix=120;%number of samples in the cyclic prefix
+gamma = P*30;%scaled power for data
+gammat= P*34;%scaled power for training
 
 %% Subsequent parametres
 symbol_size = (1+2*(n_highf+n_lowf+n_data_symble));% number of samples per OFDM symbol(without cyclic prefix)
@@ -19,8 +25,8 @@ n_tsymbols =double(uint8(n_symbols/3));%number of training OFDM symbles
 block_size= numbits/n_symbols;%number of bits
 %the relationship between number of bits per sample is determined by the
 %modulation index of qam
-P = 0.00125;%Average power constraint
-gamma = P*34;%scaled power
+
+
 
 %% Pre-allocate memory
 %to do
@@ -92,35 +98,35 @@ Fs=44100;
 audiowrite('tx.wav',x,Fs);
 
 %% Fake channel
-load('IR0.mat', 'impulse');
-h = impulse';
-y = conv(x, impulse);
-% no noise
-y = y(1:length(x));
-% plus random silence
-% create random L0 and L1 pauses from uniform distribution 
-L0 = round(1000*rand(1,1));
-L1 = round(1000*rand(1,1));
-y = [zeros(L0,1) ; y ; zeros(L1,1)];
-% add noise
-% y = y + 0.0001*randn(length(y),1);
-
-
-
-% % actual channel:
+% load('IR0.mat', 'impulse');
+% h = impulse';
+% y = conv(x, impulse);
+% % no noise
+% y = y(1:length(x));
+% % plus random silence
 % % create random L0 and L1 pauses from uniform distribution 
-% a = 0.25;
-% b = 3;
-% L0 = (b-a).*rand(1,1) + a;
-% L1 = (b-a).*rand(1,1) + a;
-% % change these lines before submission!!!!!
-% cmd1 = sprintf('~/Desktop/ECE4670/ccplay/ccplay --prepause ');
-% cmd2 = sprintf('%f --postpause %f --channel audio0 tx.wav rx.wav', L0, L1);
-% cmd = [cmd1 cmd2];
-% system(cmd);
+% L0 = round(1000*rand(1,1));
+% L1 = round(1000*rand(1,1));
+% y = [zeros(L0,1) ; y ; zeros(L1,1)];
+% % % add noise
+% % y = y + 0.0001*randn(length(y),1);
+
+
+
+% actual channel:
+create random L0 and L1 pauses from uniform distribution 
+a = 0.25;
+b = 3;
+L0 = (b-a).*rand(1,1) + a;
+L1 = (b-a).*rand(1,1) + a;
+% change these lines before submission!!!!!
+cmd1 = sprintf('~/Desktop/ECE4670/ccplay/ccplay --prepause ');
+cmd2 = sprintf('%f --postpause %f --channel audio0 tx.wav rx.wav', L0, L1);
+cmd = [cmd1 cmd2];
+system(cmd);
 
 %% Decoder
-% y = audioread('rx.wav');
+y = audioread('rx0.wav');
 
 %% trigger to avoid prepause of receiver
 square = y.^2;
@@ -138,11 +144,11 @@ end
 L1=start;
 
 
-% stem(y)
-%disp(start)
+stem(y)
+disp(start)
 
-% hold on
-% plot(start,0,'-o')
+hold on
+plot(start,0,'-o')
 len_sent=length(x);%hardcode later!!
 y = y(start:(start+len_sent-1));%removed silence
 
@@ -243,7 +249,8 @@ hold on
 plot(gain(:,1));
 
 % FIgure of merit
-N=numbits-correct;
-Pr=max(1,800*P);
+Ne=numbits-correct;
+Pr=max(1,800*avg_power);
 data_rate=2e5*44.1e3/length(x);
-perf=(data_rate*(1-N/1e5)^10)/Pr;
+perf=(data_rate*(1-Ne/1e5)^10)/Pr;
+
