@@ -231,7 +231,16 @@ d=find(outbits~=bits);
 t=length(d);
 wrong=zeros(t,1);
 wrong(d)=1;
-plot(wrong);
+figure(1)
+plot(wrong)
+
+%plot channel gain vs qam allocation and zero-padding
+figure(2)
+scale=(n_lowf+n_data_symble+n_highf)/length(gain(:,1));
+alloc=[zeros(uint64(n_lowf/scale),1);ones(uint64(n_lowqam/scale),1);2*ones(uint64(n_prime/scale),1);ones(uint64(n_highqam/scale),1);zeros(uint64(n_highf/scale),1)];
+plot(alloc);
+hold on
+plot(gain(:,1));
 
 % FIgure of merit
 N=numbits-correct;
