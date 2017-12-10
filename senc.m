@@ -16,6 +16,6 @@ for i=1:50
     x5=[x4(end-119:end);x4];
     x=[x;x5];
 end
-    
+audiowrite('tx.wav',x,44100);
 return
  
