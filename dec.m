@@ -1,10 +1,8 @@
 function outbits = dec()
 
-clear all
 %% Parametres to tweak
 numbits=2e5; %length of bitsteam to send
 P = 0.00125;%Average power constraint
-bits=randi([0 1],numbits,1); %bitstream
 M=64; % modulation index of higher gain frequency band
 N=16;% lower modulation index of lower gain frequency bands
 n_data_symble=2125; %number of samples of data per symbol
