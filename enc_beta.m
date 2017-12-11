@@ -176,7 +176,11 @@ for (u=1:n_tsymbols)
     
     %%  Clock skew 
     x_ro=[1:length(phase_y)]';
-    Pol=[1.9576e-04;0.037]*2/3;
+    if(max(gain(:,1))<0.6)
+        Pol=[7.9859e-04;0.075]*2/12;
+    else
+        Pol=[3.3459e-04;0.0025]*2/12;
+    end
     phase_dif=Pol(1)*x_ro+Pol(2);
     phase_2(:,u)= wrapToPi(phase_y-fliplr(phase_r)+phase_dif);
     if(u==n_tsymbols)
