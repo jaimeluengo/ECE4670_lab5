@@ -21,7 +21,7 @@ gammat= P*40;%scaled power for training
 symbol_size = (1+2*(n_highf+n_lowf+n_data_symble));% number of samples per OFDM symbol(without cyclic prefix)
 n_prime=n_data_symble-n_highqam-n_lowqam; %number of samples with M modulation index at high gain frequency band
 n_symbols = numbits/(n_prime*log2(M)+(n_highqam+n_lowqam)*log2(N));%number of 'data' OFDM symbles
-n_tsymbols =double(uint8(n_symbols/3));%number of training OFDM symbles
+n_tsymbols =double(uint8(n_symbols/4));%number of training OFDM symbles
 block_size= numbits/n_symbols;%number of bits
 %the relationship between number of bits per sample is determined by the
 %modulation index of qam
@@ -33,10 +33,10 @@ block_size= numbits/n_symbols;%number of bits
 
 
 %% Generation of training symbles
-% t=[0:1/4000:1-1/4000];
+% % t=[0:1/4000:1-1/4000];
  t=rand(n_data_symble,1);
  rand_realizations =ones(n_data_symble,1).*exp(j*t*2*pi); %same module but
- %randomized phases
+%  %randomized phases
 
 % rand_realizations= ones(n_data_symble,1);
 
@@ -49,11 +49,13 @@ x5_train=[x4_train(end-n_prefix+1:end);x4_train]*gammat;%satisfy power constrain
 x=[];%initialize output vector
 
 x0_p=[];%delete later
-
+ty=0;
 %% encoding OFDM symbols
 for i=1:n_symbols %fills output vector symbol by symble
     x7_prime=[];
-    if(mod(i,3)==0)%introduce training symbol at positions multiple of 3
+    ty=ty+1;
+    if(mod(i-3,4)==0)%introduce training symbol at (positions-2) multiple of 4
+        ty=ty+1;
         x=[x; x5_train];
     end
     x0=bits((i-1)*block_size+1:i*block_size); %extract bits to send
@@ -125,7 +127,7 @@ audiowrite('tx.wav',x,Fs);
 % % cmd = [cmd1 cmd2];
 % % system(cmd);
 
-%% Decoder
+% Decoder
 y = audioread('rx0.wav');
 
 %% trigger to avoid prepause of receiver
@@ -158,10 +160,10 @@ y = y(start:(start+len_sent-1));%removed silence
 %% training
 indexes=[];%indexes used to delete training indexes later from y vector
 for (u=1:n_tsymbols)
-    y0_train(:,u) = y((2+4*(u-1))*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*(3+4*(u-1)));
+    y0_train(:,u) = y((2+5*(u-1))*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*(3+5*(u-1)));
     %since we are seniding training symbols at positions multiple of three
-    %we need to extract them in the form of [2+4*(u-1):3+4*(u-1)
-    indexes=[indexes;[(2+4*(u-1))*(symbol_size+n_prefix)+1:(n_prefix+symbol_size)*(3+4*(u-1))]'];
+    %we need to extract them in the form of [2+5*(u-1):3+5*(u-1)
+    indexes=[indexes;[(2+5*(u-1))*(symbol_size+n_prefix)+1:(n_prefix+symbol_size)*(3+5*(u-1))]'];
     % Convert training symbol to its original vector doing the fft and
     % extraction
     y1_train (:,u) = fft(y0_train(:,u))/sqrt(symbol_size);
@@ -169,23 +171,24 @@ for (u=1:n_tsymbols)
     
     %Gain of the channel is output/input in absolute value
     gain (:,u) = abs(y2_train(:,u)./rand_realizations);% vector channel gain
+    
     phase_y=angle(y2_train(:,u));
     phase_r=angle(rand_realizations);
-    %Phase shift of the channel is angle(output)-angle(input)
-    phase (:,u)= wrapToPi(phase_y-fliplr(phase_r)); %mantain between [-pi pi]
+    x_ro=[1:length(n_data_symble)]';
     
-    %%  Clock skew 
-    x_ro=[1:length(phase_y)]';
-    if(max(gain(:,1))<0.6)
-        Pol=[7.9859e-04;0.075]*2/12;
-    else
-        Pol=[3.3459e-04;0.0025]*2/12;
+    %phase has clock skew
+    for(t=1:2)
+        if(max(gain(:,1))<0.6)
+            Pol=[7.9859e-04;0.075]*11*t/12;
+        else
+            Pol=[3.3459e-04;0.0025]*11*t/12;
+        end
+%         Pol=[6.65058823529413e-05;0.007416666666667]*t;
+        phase_dif=Pol(1)*x_ro+Pol(2);
+        phase(:,2+4*(u-1)+1-t)=wrapToPi(phase_y-fliplr(phase_r)+phase_dif);
+        phase(:,2+4*(u-1)+t)=wrapToPi(phase_y-fliplr(phase_r)-phase_dif);
     end
-    phase_dif=Pol(1)*x_ro+Pol(2);
-    phase_2(:,u)= wrapToPi(phase_y-fliplr(phase_r)+phase_dif);
-    if(u==n_tsymbols)
-    phase_3=wrapToPi(phase_y-fliplr(phase_r)-phase_dif);% for the last symbol
-    end
+
 end
 
 y(indexes)=[]; %delete training indexes from y
@@ -193,20 +196,12 @@ outbits = [];
 
 %generate a vector of positions of data symbols until which a corresponding
 %data symbol with index f is used
-for k=1:n_tsymbols
-    if(k==n_tsymbols)
-        u(k)=4+3*k;%The last training symbol is used for all the remaing data symbols
-    else
-        u(k)=1+3*k;%index of last data symbol for which traing symbol k is used
-    end
-end
 f=1;%initialization of training symble index
 g=1; %data symbol position
 %% Decoding
 for i=1:n_symbols
-    if(i>=u(f))
+    if(i~=1&&mod(i-1,4)==0)
         f=f+1; %f is the training symbol used for decoding at each time
-        g=1;
     end
     y3=[];
     %more indexing... used for extraction of data symble without cyclic
@@ -217,13 +212,8 @@ for i=1:n_symbols
     %reverse operations as of encoding
     y1 = fft(y0)/sqrt(symbol_size);
     y2 = y1(n_lowf+2:n_lowf+n_data_symble+1);
-    if(g==1)
-        y3=y2./gain(:,f).*exp(-j*phase_2(:,f))./rand_realizations/gamma;
-    elseif(g==4)
-        y3=y2./gain(:,f).*exp(-j*phase_3)./rand_realizations/gamma;
-    else
-        y3=y2./gain(:,f).*exp(-j*phase(:,f))./rand_realizations/gamma;
-    end
+    y3=y2./gain(:,f).*exp(-j*phase(:,i))./rand_realizations/gamma;
+
     %separate samples into its corresponding qam frequency bands
     y3_lowqam=y3(1:n_lowqam)*log2(N);
     y3_prime=y3(n_lowqam+1:n_data_symble-n_highqam)*log2(M);
