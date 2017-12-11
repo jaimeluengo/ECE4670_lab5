@@ -73,7 +73,6 @@ for i=1:n_symbols %fills output vector symbol by symble
     x2=[zeros(n_lowf,1);x1_rand;zeros(n_highf,1)];
     x3=[0;x2;conj(fliplr(x2')')];
     x4=ifft(x3)*sqrt(length(x3));
-    x0_p=[x0_p;x0_prime];
     x5=[x4(end-n_prefix+1:end);x4];
     x=[x;x5];
 end
