@@ -1,50 +1,59 @@
 function x = enc(bits)
 
-%% Parameters to tweak
-numbits = 2e5;  %length of bitsteam to send
-M = 64;  % modulation index of higher gain frequency band
-N = 16;  % lower modulation index of lower gain frequency bands
-n_data_symble = 2125;  %number of samples of data per symbol
-n_lowqam = 50;  % number of samples with N modulation index at low frequency
-n_highqam = 75;  % number of samples with N modulation index at high frequency
-n_lowf = 112;  % number of samples zero-padded in the low frequency band
-n_highf = 908;  % number of sa`mples zero-padded in the high frequency band
-n_prefix = 120;  % number of samples in the cyclic prefix
+%% Parametres to tweak
+numbits=2e5; %length of bitsteam to send
+P = 0.00125;%Average power constraint
+bits=randi([0 1],numbits,1); %bitstream
+M=64; % modulation index of higher gain frequency band
+N=16;% lower modulation index of lower gain frequency bands
+n_data_symble=2125; %number of samples of data per symbol
+n_lowqam=50;%number of samples with N modulation index at low frequency
+n_highqam=75;%number of samples with N modulation index at high frequency
+n_lowf=120; %number of samples zero-padded in the low frequency band
+n_highf=908;%number of sa`mples zero-padded in the high frequency band
+n_prefix=120;%number of samples in the cyclic prefix
+gamma = P*30;%scaled power for data
+gammat= P*40;%scaled power for training
 
-%% Subsequent parameters
-symbol_size = (1+2*(n_highf+n_lowf+n_data_symble));  % number of samples per OFDM symbol(without cyclic prefix)
-n_prime = n_data_symble-n_highqam-n_lowqam;  % number of samples with M modulation index at high gain frequency band
-n_symbols = numbits/(n_prime*log2(M)+(n_highqam+n_lowqam)*log2(N));  % number of 'data' OFDM symbles
-n_tsymbols = double(uint8(n_symbols/3));  % number of training OFDM symbles
-block_size = numbits/n_symbols;  %number of bits
-% the relationship between number of bits per sample is determined by the
-% modulation index of QAM
-P = 0.00125;  % Average power constraint
-gamma = P*30;  % scaled power
-gammat = P*40;
+%% Subsequent parametres
+symbol_size = (1+2*(n_highf+n_lowf+n_data_symble));% number of samples per OFDM symbol(without cyclic prefix)
+n_prime=n_data_symble-n_highqam-n_lowqam; %number of samples with M modulation index at high gain frequency band
+n_symbols = numbits/(n_prime*log2(M)+(n_highqam+n_lowqam)*log2(N));%number of 'data' OFDM symbles
+n_tsymbols =double(uint8(n_symbols/4));%number of training OFDM symbles
+block_size= numbits/n_symbols;%number of bits
+%the relationship between number of bits per sample is determined by the
+%modulation index of qam
 
-%% Generation of training symbols
-rng(17);
-t = rand(n_data_symble,1);
-rand_realizations = ones(n_data_symble,1).*exp(1j*t*2*pi);  % same module but
 
-% zero-padding
-x2_train = [zeros(n_lowf,1) ; rand_realizations ; zeros(n_highf,1)];
-% prepend DC 0 and postpend flipped conjugate
-x3_train = [0;x2_train ; conj(fliplr(x2_train')')];
-% make training symbol real by taking ifft
-x4_train = ifft(x3_train)*sqrt(length(x3_train)); 
-% satisfy power constraint
-x5_train = [x4_train(end-n_prefix+1:end);x4_train]*gammat;
-%initialize output vector
-x=[];
-%delete later
-x0_p=[];
 
+%% Pre-allocate memory
+%to do
+
+
+%% Generation of training symbles
+% % t=[0:1/4000:1-1/4000];
+ t=rand(n_data_symble,1);
+ rand_realizations =ones(n_data_symble,1).*exp(j*t*2*pi); %same module but
+%  %randomized phases
+
+% rand_realizations= ones(n_data_symble,1);
+
+% rand_realizations=[1:n_data_symble]';
+
+x2_train=[zeros(n_lowf,1);rand_realizations;zeros(n_highf,1)];%zero-padding
+x3_train=[0;x2_train;conj(fliplr(x2_train')')];%prepend DC 0 and postpend flipped conjugate
+x4_train=ifft(x3_train)*sqrt(length(x3_train)); %make training symble real by taking ifft
+x5_train=[x4_train(end-n_prefix+1:end);x4_train]*gammat;%satisfy power constraint
+x=[];%initialize output vector
+
+x0_p=[];%delete later
+ty=0;
 %% encoding OFDM symbols
-for i = 1:n_symbols  % fills output vector symbol by symbol
+for i=1:n_symbols %fills output vector symbol by symble
     x7_prime=[];
-    if(mod(i,3)==0)%introduce training symbol at positions multiple of 3
+    ty=ty+1;
+    if(mod(i-3,4)==0)%introduce training symbol at (positions-2) multiple of 4
+        ty=ty+1;
         x=[x; x5_train];
     end
     x0=bits((i-1)*block_size+1:i*block_size); %extract bits to send
@@ -81,6 +90,9 @@ for i = 1:n_symbols  % fills output vector symbol by symbol
     x=[x;x5];
 end
 
+% check if power constraint is violated
+avg_power = (x'*x)/length(x);
+avg_pwr_flag = (avg_power <= P);
 
 Fs=44100;
 audiowrite('tx.wav',x,Fs);
