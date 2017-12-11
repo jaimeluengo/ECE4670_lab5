@@ -33,6 +33,7 @@ rand_realizations =ones(n_data_symble,1).*exp(j*t*2*pi); %same module but
 y = audioread('rx.wav');
 
 
+%% trigger to avoid prepause of receiver
 square = y.^2;
 W = 10;
 s = movmean(square, W);
@@ -45,9 +46,15 @@ for k = 1:len_y
         break;
     end
 end
+L1=start;
 
 
-len_sent=134631;%hardcode later!!
+% stem(y)
+% disp(start)
+% 
+% hold on
+% plot(start,0,'-o')
+len_sent=length(x);%hardcode later!!
 y = y(start:(start+len_sent-1));%removed silence
 
 % remember to normalize by gamma
@@ -56,10 +63,10 @@ y = y(start:(start+len_sent-1));%removed silence
 %% training
 indexes=[];%indexes used to delete training indexes later from y vector
 for (u=1:n_tsymbols)
-    y0_train(:,u) = y((2+4*(u-1))*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*(3+4*(u-1)));
+    y0_train(:,u) = y((2+5*(u-1))*(symbol_size+n_prefix)+1+n_prefix:(n_prefix+symbol_size)*(3+5*(u-1)));
     %since we are seniding training symbols at positions multiple of three
-    %we need to extract them in the form of [2+4*(u-1):3+4*(u-1)
-    indexes=[indexes;[(2+4*(u-1))*(symbol_size+n_prefix)+1:(n_prefix+symbol_size)*(3+4*(u-1))]'];
+    %we need to extract them in the form of [2+5*(u-1):3+5*(u-1)
+    indexes=[indexes;[(2+5*(u-1))*(symbol_size+n_prefix)+1:(n_prefix+symbol_size)*(3+5*(u-1))]'];
     % Convert training symbol to its original vector doing the fft and
     % extraction
     y1_train (:,u) = fft(y0_train(:,u))/sqrt(symbol_size);
@@ -67,10 +74,24 @@ for (u=1:n_tsymbols)
     
     %Gain of the channel is output/input in absolute value
     gain (:,u) = abs(y2_train(:,u)./rand_realizations);% vector channel gain
+    
     phase_y=angle(y2_train(:,u));
     phase_r=angle(rand_realizations);
-    %Phase shift of the channel is angle(output)-angle(input)
-    phase (:,u)= wrapToPi(phase_y-fliplr(phase_r)); %mantain between [-pi pi]
+    x_ro=[1:length(n_data_symble)]';
+    
+    %phase has clock skew
+    for(t=1:2)
+        if(max(gain(:,1))<0.6)
+            Pol=[7.9859e-04;0.075]*11*t/12;
+        else
+            Pol=[3.3459e-04;0.0025]*11*t/12;
+        end
+%         Pol=[6.65058823529413e-05;0.007416666666667]*t;
+        phase_dif=Pol(1)*x_ro+Pol(2);
+        phase(:,2+4*(u-1)+1-t)=wrapToPi(phase_y-fliplr(phase_r)+phase_dif);
+        phase(:,2+4*(u-1)+t)=wrapToPi(phase_y-fliplr(phase_r)-phase_dif);
+    end
+
 end
 
 y(indexes)=[]; %delete training indexes from y
@@ -78,18 +99,11 @@ outbits = [];
 
 %generate a vector of positions of data symbols until which a corresponding
 %data symbol with index f is used
-for k=1:n_tsymbols
-    if(k==n_tsymbols)
-        u(k)=4+3*k;%The last training symbol is used for all the remaing data symbols
-    else
-        u(k)=1+3*k;%index of last data symbol for which traing symbol k is used
-    end
-end
 f=1;%initialization of training symble index
-
+g=1; %data symbol position
 %% Decoding
 for i=1:n_symbols
-    if(i>=u(f))
+    if(i~=1&&mod(i-1,4)==0)
         f=f+1; %f is the training symbol used for decoding at each time
     end
     y3=[];
@@ -101,7 +115,8 @@ for i=1:n_symbols
     %reverse operations as of encoding
     y1 = fft(y0)/sqrt(symbol_size);
     y2 = y1(n_lowf+2:n_lowf+n_data_symble+1);
-    y3=y2./gain(:,f).*exp(-1j*phase(:,f))./rand_realizations/gamma;
+    y3=y2./gain(:,f).*exp(-j*phase(:,i))./rand_realizations/gamma;
+
     %separate samples into its corresponding qam frequency bands
     y3_lowqam=y3(1:n_lowqam)*log2(N);
     y3_prime=y3(n_lowqam+1:n_data_symble-n_highqam)*log2(M);
@@ -126,6 +141,7 @@ for i=1:n_symbols
         y4_highqam(log2(N)*(k-1)+1:log2(N)*k,1)=(fliplr(de2bi(z_highqam(k),log2(N))))';
     end
     outbits=[outbits;y4_highqam];
+    g=g+1;
 end
 
 
