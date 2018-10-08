@@ -1,1 +1,2 @@
-# Shakespeare
+# OFDM Coding and Decoding
+Design and implement an encoder and decoder using 64-QAM and 16-QAM with OFDM to communicate random bits over a physical Toeplitz channel with Gaussian noise. Estimated phase shift changes through time to improve data rate. Work done in a group of two students. Project implemented entirely in MATLAB and interfaces with a physical channel accessible through a remote server. Project worked on for the course ECE 4670: Digital Communication System Design.
